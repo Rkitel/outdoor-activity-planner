@@ -1,0 +1,6 @@
+{
+  "name": "StrideCast SG - Activity Planner for Runners & Cyclists",
+  "description": "Smart outdoor activity planner for Singapore. Evaluates live temperature, humidity, rainfall, wind speed, PM2.5/PSI, and heat stress to recommend peak running and cycling windows with route micro-climate overlays.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
