@@ -1,7 +1,8 @@
 /**
- * API Availability Monitor
+ * Serverless Function: /api/apiavailability
  * Tests and benchmarks real-time availability, response latency, and payload integrity
  * for all 10 Singapore Meteorological & Environmental endpoints from data.gov.sg.
+ * Compatible with Vercel Serverless Functions, Netlify, Express, and Edge runtimes.
  */
 
 export interface EndpointConfig {
@@ -99,7 +100,6 @@ export const DATA_GOV_SG_ENDPOINTS: EndpointConfig[] = [
 
 /**
  * Probes a single endpoint and measures latency and payload response.
- * Includes gentle backoff on 429 rate limit.
  */
 export async function checkEndpointAvailability(
   endpoint: EndpointConfig,
@@ -198,7 +198,6 @@ export async function checkAllEndpointsAvailability(): Promise<ApiAvailabilitySu
     const endpoint = DATA_GOV_SG_ENDPOINTS[i];
     const res = await checkEndpointAvailability(endpoint);
     results.push(res);
-    // 120ms inter-call spacing
     if (i < DATA_GOV_SG_ENDPOINTS.length - 1) {
       await new Promise((r) => setTimeout(r, 120));
     }
@@ -229,28 +228,39 @@ export async function checkAllEndpointsAvailability(): Promise<ApiAvailabilitySu
   };
 }
 
-// Auto-run if executed directly via tsx/node CLI
-if (typeof process !== 'undefined' && process.argv && process.argv[1]?.endsWith('apiavailability.ts')) {
-  console.log('Testing data.gov.sg real-time meteorological endpoints...\n');
+/**
+ * Serverless Default HTTP Handler (Node/Vercel/Express/Web Request compatible)
+ */
+export default async function handler(req: any, res?: any) {
+  // CORS Headers
+  if (res && typeof res.setHeader === 'function') {
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,HEAD');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+  }
 
-  checkAllEndpointsAvailability().then((summary) => {
-    console.table(
-      summary.endpoints.map((e) => ({
-        Endpoint: e.name,
-        Status: e.status,
-        HTTP: e.httpStatus ?? 'ERR',
-        'Latency (ms)': e.latencyMs,
-        Records: e.dataRecordsCount ?? 0,
-        Error: e.errorMessage || 'None'
-      }))
-    );
+  // Handle preflight OPTIONS
+  if (req?.method === 'OPTIONS') {
+    if (res && typeof res.status === 'function') {
+      return res.status(200).end();
+    }
+    return new Response(null, { status: 200 });
+  }
 
-    console.log(`\nAvailability Score: ${summary.systemAvailabilityScorePercent}% (${summary.onlineCount}/${summary.totalEndpoints} Online)`);
-    console.log(`Average Latency: ${summary.averageLatencyMs} ms`);
-  }).catch((err) => {
-    console.error('API availability test failed:', err);
-    process.exit(1);
+  const summary = await checkAllEndpointsAvailability();
+
+  // Express / Vercel Serverless (req, res) response
+  if (res && typeof res.status === 'function') {
+    return res.status(200).json(summary);
+  }
+
+  // Web Standard Fetch (Edge / Cloudflare Pages / Next Route handler)
+  return new Response(JSON.stringify(summary, null, 2), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
+    }
   });
 }
-
-export default checkAllEndpointsAvailability;

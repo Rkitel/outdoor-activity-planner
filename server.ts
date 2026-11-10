@@ -1,8 +1,8 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { performDeepHealthCheck } from './api/health';
-import { checkAllEndpointsAvailability } from './api/apiavailability';
+import healthHandler from './api/health';
+import apiAvailabilityHandler from './api/apiavailability';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,27 +12,9 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// GET /api/health
-app.get('/api/health', async (_req, res) => {
-  try {
-    const health = await performDeepHealthCheck();
-    res.setHeader('Content-Type', 'application/json');
-    res.json(health);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to retrieve health status', details: String(err) });
-  }
-});
-
-// GET /api/apiavailability
-app.get('/api/apiavailability', async (_req, res) => {
-  try {
-    const report = await checkAllEndpointsAvailability();
-    res.setHeader('Content-Type', 'application/json');
-    res.json(report);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to check API availability', details: String(err) });
-  }
-});
+// Serverless route handlers mounted on Express for local dev & preview
+app.all('/api/health', (req, res) => healthHandler(req, res));
+app.all('/api/apiavailability', (req, res) => apiAvailabilityHandler(req, res));
 
 async function start() {
   if (process.env.NODE_ENV === 'production') {

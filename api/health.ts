@@ -1,7 +1,6 @@
 /**
- * System Health and Diagnostic Probe
- * Evaluates application runtime status, memory consumption, node environment,
- * and service readiness for StrideCast SG.
+ * Serverless Function: /api/health
+ * Compatible with Vercel Serverless Functions, Netlify, Express, and Edge runtimes.
  */
 
 export interface SystemHealthReport {
@@ -36,7 +35,6 @@ export function getSystemHealth(): SystemHealthReport {
     : { heapUsed: 0, heapTotal: 0, rss: 0, external: 0 };
 
   const toMB = (bytes: number) => Math.round((bytes / 1024 / 1024) * 100) / 100;
-
   const env = typeof process !== 'undefined' ? process.env : {};
 
   return {
@@ -89,14 +87,39 @@ export async function performDeepHealthCheck(): Promise<SystemHealthReport> {
   return baseHealth;
 }
 
-// Auto-run if executed directly via tsx/node CLI
-if (typeof process !== 'undefined' && process.argv && process.argv[1]?.endsWith('health.ts')) {
-  performDeepHealthCheck().then((report) => {
-    console.log(JSON.stringify(report, null, 2));
-  }).catch((err) => {
-    console.error('Health check failed:', err);
-    process.exit(1);
+/**
+ * Serverless Default HTTP Handler (Node/Vercel/Express/Web Request compatible)
+ */
+export default async function handler(req: any, res?: any) {
+  // CORS Headers
+  if (res && typeof res.setHeader === 'function') {
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,HEAD');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+  }
+
+  // Handle preflight OPTIONS
+  if (req?.method === 'OPTIONS') {
+    if (res && typeof res.status === 'function') {
+      return res.status(200).end();
+    }
+    return new Response(null, { status: 200 });
+  }
+
+  const report = await performDeepHealthCheck();
+
+  // Express / Vercel Serverless (req, res) response
+  if (res && typeof res.status === 'function') {
+    return res.status(200).json(report);
+  }
+
+  // Web Standard Fetch (Edge / Cloudflare Pages / Next Route handler)
+  return new Response(JSON.stringify(report, null, 2), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
+    }
   });
 }
-
-export default getSystemHealth;
